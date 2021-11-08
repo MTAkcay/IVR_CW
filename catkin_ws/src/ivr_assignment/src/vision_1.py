@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import cv2
 import numpy as np
 import roslib
@@ -12,8 +14,8 @@ class vision_1:
         
         # initialize the bridge between openCV and ROS
         self.bridge = CvBridge()
-        self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw",Image,self.callback1)
-        self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw",Image,self.callback2)
+        self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw", Image, self.callback1)
+        self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw", Image, self.callback2)
         self.joint2Pub = rospy.Publisher("joint_angle_2", Float64, queue_size=10)
         self.joint3Pub = rospy.Publisher("joint_angle_3", Float64, queue_size=10)
         self.joint4Pub = rospy.Publisher("joint_angle_4", Float64, queue_size=10)
@@ -24,7 +26,7 @@ class vision_1:
     def getCentre(self, mask):
         control = sum(sum(mask))
         if control < 10:
-            return -1
+            return np.array([])
         M = cv2.moments(mask)
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
@@ -72,9 +74,18 @@ class vision_1:
             print(e)
 
     def determinejointangles(self):
-        self.joint2.data = np.arctan2()
-        self.joint3.data = np.arctan2()
-        self.joint4.data = np.arctan2()
+        #vectorYB = self.finalBlueCenter - self.finalYellowCenter
+        #vectorRB = self.finalRedCenter - self.finalBlueCenter
+
+        #vecjoint2 = np.array(vectorYB[0], vectorYB[2])
+        #vecjoint3 = np.array(vectorYB[1], vectorYB[2])
+
+        self.joint2.data = 0 #self.angleBetweenVectors(vecjoint2, np.array([0,np.array([])]))
+        self.joint3.data = 0 #self.angleBetweenVectors(vecjoint3, np.array([0,np.array([])]))
+        self.joint4.data = 0 #self.angleBetweenVectors(0,0)
+
+    def angleBetweenVectors(self, vectorFrom, vectorTo):
+        return np.arctan2(np.cross(vectorTo, vectorFrom), np.dot(vectorFrom, vectorTo))
 
     def combinecenters(self):
         self.originPoint = self.originhandler(self.greenC1, self.greenC2)
@@ -83,20 +94,20 @@ class vision_1:
         self.finalYellowCenter = self.centercamfusion(self.yellowC1, self.yellowC2)
 
     def centercamfusion(self, campoint1, campoint2):
-        if campoint1 == -1:
-            return [self.originPoint[0], campoint2[0], campoint2[1]]
-        elif campoint2 == -1:
-            return [campoint1[0], self.originPoint[1], campoint1[1]]
-        elif (campoint1 != -1) and (campoint2 != -1):
-            return [campoint1[0],campoint2[0], (campoint2[1] + campoint1[1]) / 2]
+        if campoint1.any() == np.array([]):
+            return np.array([self.originPoint[0], campoint2[0], campoint2[1]])
+        elif campoint2.any() == np.array([]):
+            return np.array([campoint1[0], self.originPoint[1], campoint1[1]])
+        elif (campoint1.any()  != np.array([])) and (campoint2.any() != np.array([])):
+            return np.array([campoint1[0],campoint2[0], (campoint2[1] + campoint1[1]) / 2])
 
     def originhandler(self, campoint1, campoint2):
-        if campoint1 == -1:
-            return [campoint2[0], campoint2[0], campoint2[1]]
-        elif campoint2 == -1:
-            return [campoint1[0], campoint1[0], campoint1[1]]
-        elif (campoint1 != -1) and (campoint2 != -1):
-            return [campoint1[0],campoint2[0], (campoint2[1] + campoint1[1]) / 2]
+        if campoint1.any() == np.array([]):
+            return np.array([campoint2[0], campoint2[0], campoint2[1]])
+        elif campoint2.any() == np.array([]):
+            return np.array([campoint1[0], campoint1[0], campoint1[1]])
+        elif (campoint1.any() != np.array([])) and (campoint2.any() != np.array([])):
+            return np.array([campoint1[0], campoint2[0], (campoint2[1] + campoint1[1]) / 2])
 
 # call the class
 def main(args):
