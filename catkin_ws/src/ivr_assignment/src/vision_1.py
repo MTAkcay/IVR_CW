@@ -95,16 +95,19 @@ class vision_1:
         vectorYB = self.finalBlueCenter - self.finalYellowCenter
         vectorBR = self.finalRedCenter - self.finalBlueCenter
 
-        vecjoint2 = np.array([vectorYB[0], vectorYB[2]])
-        vecjoint3 = np.array([vectorYB[1], vectorYB[2]])
-        xyPlaneNormal = np.array([0, 0, -1])
+        # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
+
+        vecjoint2 = np.array([-vectorYB[1], vectorYB[2]])  # y axis also appears to be flipped from camera perspective
+        vecjoint3 = np.array([vectorYB[0], vectorYB[2]])
+        xyPlaneNormal = np.array([0, 0, -1])  # z axis is flipped
+        zUnitVector = np.array([0, -1])  # z axis is flipped
 
         # self.joint2.data = self.angleBetweenVectors(vecjoint2, xyPlaneNormal)
         # self.joint3.data = self.angleBetweenVectors(vecjoint3, xyPlaneNormal)
-        # self.joint2.data = self.finalBlueCenter[0]/500.0
+
         ang = self.angleBetweenVectors(vectorYB, xyPlaneNormal)
-        # self.joint2.data = ang[0]
-        self.joint3.data = ang[1]
+        self.joint2.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
+        self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
         # self.joint4.data = ang[2]
 
     def angleBetweenVectors(self, vectorFrom, vectorTo):
