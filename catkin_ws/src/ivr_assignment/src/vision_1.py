@@ -30,6 +30,12 @@ class vision_1:
         self.yellowC1 = np.array([])
 
         # TODO: Add publishers for each of the components of vectorYB and each of the components of the final centers
+        self. vectorYBPub = rospy.Publisher("vectorybpub")
+        self. finalRedCenterPub = rospy.Publisher("finalredcenterpub")
+        self. finalGreenCenterPub = rospy.Publisher("finalgreencenterpub")
+        self. finalBlueCenterPub = rospy.Publisher("finalbluecenterpub")
+        self. finalYellowCenterPub = rospy.Publisher("finalyellowcenterpub")
+
 
     def getCentre(self, mask):
         control = sum(sum(mask))
@@ -70,6 +76,11 @@ class vision_1:
         self.combinecenters()
         self.determinejointangles()
         self.publishangles()
+        self.vectorYBPub.publish(self.vectorYB)
+        self.finalRedCenterPub.publish(self.finalRedCenter)
+        self.finalGreenCenterPub.publish(self.finalGreenCenter)
+        self.finalBlueCenterPub.publish(self.finalBlueCenter)
+        self.finalYellowCenterPub.publish(self.finalYellowCenter)
 
     def publishangles(self):
         # Publish the results
