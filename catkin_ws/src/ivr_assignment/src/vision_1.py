@@ -30,11 +30,11 @@ class vision_1:
         self.yellowC1 = np.array([])
 
         # TODO: Add publishers for each of the components of vectorYB and each of the components of the final centers
-        self. vectorYBPub = rospy.Publisher("vectorybpub")
-        self. finalRedCenterPub = rospy.Publisher("finalredcenterpub")
-        self. finalGreenCenterPub = rospy.Publisher("finalgreencenterpub")
-        self. finalBlueCenterPub = rospy.Publisher("finalbluecenterpub")
-        self. finalYellowCenterPub = rospy.Publisher("finalyellowcenterpub")
+        self.vectorYBPub = rospy.Publisher("vectorybpub", Float64, queue_size=10)
+        self.finalRedCenterPub = rospy.Publisher("finalredcenterpub", Float64, queue_size=10)
+        self.finalGreenCenterPub = rospy.Publisher("finalgreencenterpub", Float64, queue_size=10)
+        self.finalBlueCenterPub = rospy.Publisher("finalbluecenterpub", Float64, queue_size=10)
+        self.finalYellowCenterPub = rospy.Publisher("finalyellowcenterpub", Float64, queue_size=10)
 
 
     def getCentre(self, mask):
@@ -78,7 +78,7 @@ class vision_1:
         self.publishangles()
         self.vectorYBPub.publish(self.vectorYB)
         self.finalRedCenterPub.publish(self.finalRedCenter)
-        self.finalGreenCenterPub.publish(self.finalGreenCenter)
+        self.finalGreenCenterPub.publish(self.originPoint)
         self.finalBlueCenterPub.publish(self.finalBlueCenter)
         self.finalYellowCenterPub.publish(self.finalYellowCenter)
 
@@ -92,20 +92,20 @@ class vision_1:
             print(e)
 
     def determinejointangles(self):
-        vectorYB = self.finalBlueCenter - self.finalYellowCenter
+        self.vectorYB = self.finalBlueCenter - self.finalYellowCenter
         vectorBR = self.finalRedCenter - self.finalBlueCenter
 
         # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
 
-        vecjoint2 = np.array([-vectorYB[1], vectorYB[2]])  # y axis also appears to be flipped from camera perspective
-        vecjoint3 = np.array([vectorYB[0], vectorYB[2]])
+        vecjoint2 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
+        vecjoint3 = np.array([self.vectorYB[0], self.vectorYB[2]])
         xyPlaneNormal = np.array([0, 0, -1])  # z axis is flipped
         zUnitVector = np.array([0, -1])  # z axis is flipped
 
         # self.joint2.data = self.angleBetweenVectors(vecjoint2, xyPlaneNormal)
         # self.joint3.data = self.angleBetweenVectors(vecjoint3, xyPlaneNormal)
 
-        ang = self.angleBetweenVectors(vectorYB, xyPlaneNormal)
+        ang = self.angleBetweenVectors(self.vectorYB, xyPlaneNormal)
         self.joint2.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
         self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
         # self.joint4.data = ang[2]
