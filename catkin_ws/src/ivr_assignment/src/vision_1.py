@@ -30,6 +30,7 @@ class vision_1:
         self.yellowC1 = np.array([])
 
         # TODO: Add publishers for each of the components of vectorYB and each of the components of the final centers
+        self.blue = Float64()
         self.vectorYBPub = rospy.Publisher("vectorybpub", Float64, queue_size=10)
         self.finalRedCenterPub = rospy.Publisher("finalredcenterpub", Float64, queue_size=10)
         self.finalGreenCenterPub = rospy.Publisher("finalgreencenterpub", Float64, queue_size=10)
@@ -78,8 +79,9 @@ class vision_1:
         self.publishangles()
         self.vectorYBPub.publish(self.vectorYB)
         self.finalRedCenterPub.publish(self.finalRedCenter)
-        self.finalGreenCenterPub.publish(self.originPoint)
-        self.finalBlueCenterPub.publish(self.finalBlueCenter)
+        # self.finalGreenCenterPub.publish(self.originPoint)
+        self.blue.data = self.finalBlueCenter[1]/500.0
+        self.finalBlueCenterPub.publish(self.blue)
         self.finalYellowCenterPub.publish(self.finalYellowCenter)
 
     def publishangles(self):
@@ -93,22 +95,18 @@ class vision_1:
 
     def determinejointangles(self):
         self.vectorYB = self.finalBlueCenter - self.finalYellowCenter
-        vectorBR = self.finalRedCenter - self.finalBlueCenter
+        self.vectorBR = self.finalRedCenter - self.finalBlueCenter
 
         # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
 
         vecjoint2 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
         vecjoint3 = np.array([self.vectorYB[0], self.vectorYB[2]])
-        xyPlaneNormal = np.array([0, 0, -1])  # z axis is flipped
+        vecjoint4 = np.array([-self.vectorBR[1], self.vectorBR[2]])
         zUnitVector = np.array([0, -1])  # z axis is flipped
 
-        # self.joint2.data = self.angleBetweenVectors(vecjoint2, xyPlaneNormal)
-        # self.joint3.data = self.angleBetweenVectors(vecjoint3, xyPlaneNormal)
-
-        ang = self.angleBetweenVectors(self.vectorYB, xyPlaneNormal)
         self.joint2.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
         self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
-        # self.joint4.data = ang[2]
+        self.joint4.data = self.angleBetweenVectors(vecjoint2, vecjoint4)
 
     def angleBetweenVectors(self, vectorFrom, vectorTo):
         return np.arctan2(np.cross(vectorTo, vectorFrom), np.dot(vectorFrom, vectorTo))
