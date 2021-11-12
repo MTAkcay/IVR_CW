@@ -20,12 +20,12 @@ class vision_2:
         self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw", Image, self.callback2)
         self.joint1Pub = rospy.Publisher("joint_angle_1", Float64, queue_size=10)
         self.joint3Pub = rospy.Publisher("joint_angle_3", Float64, queue_size=10)
-        self.joint4Puba = rospy.Publisher("joint_angle_4a", Float64, queue_size=10)
+        self.joint4Pub = rospy.Publisher("joint_angle_4a", Float64, queue_size=10)
         self.joint4Pubb = rospy.Publisher("joint_angle_4b", Float64, queue_size=10)
         self.joint4Pubc = rospy.Publisher("joint_angle_4c", Float64, queue_size=10)
         self.joint1 = Float64()
         self.joint3 = Float64()
-        self.joint4a = Float64()
+        self.joint4 = Float64()
         self.joint4b = Float64()
         self.joint4c = Float64()
         self.greenC1 = np.array([])
@@ -80,25 +80,24 @@ class vision_2:
             self.joint3Pub.publish(self.joint3)
             # self.joint4Puba.publish(self.joint4a)
             # self.joint4Pubb.publish(self.joint4b)
-            self.joint4Pubc.publish(self.joint4c)
+            self.joint4Pub.publish(self.joint4c)
         except CvBridgeError as e:
             print(e)
 
     def determinejointangles(self):
-        vectorYB = self.finalBlueCenter - self.finalYellowCenter
-        vectorBR = self.finalRedCenter - self.finalBlueCenter
+        self.vectorYB = self.finalBlueCenter - self.finalYellowCenter
+        self.vectorBR = self.finalRedCenter - self.finalBlueCenter
 
-        vecjoint2 = np.array([vectorYB[0], vectorYB[2]])
-        vecjoint3 = np.array([vectorYB[1], vectorYB[2]])
-        xyPlaneNormal = np.array([0, -1])
+        # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
 
-        self.joint1.data = self.angleBetweenVectors(vecjoint2, xyPlaneNormal)
-        self.joint3.data = self.angleBetweenVectors(vecjoint3, xyPlaneNormal)
-        ang = self.angleBetweenVectors(vectorYB, vectorBR)
-        print(ang)
-        self.joint4a.data = ang[0]
-        self.joint4b.data = ang[1]
-        self.joint4c.data = ang[2]
+        vecjoint2 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
+        vecjoint3 = np.array([self.vectorYB[0], self.vectorYB[2]])
+        vecjoint4 = np.array([-self.vectorBR[1], self.vectorBR[2]])
+        zUnitVector = np.array([0, -1])  # z axis is flipped
+
+        self.joint1.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
+        self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
+        self.joint4.data = self.angleBetweenVectors(vecjoint2, vecjoint4)
 
     def angleBetweenVectors(self, vectorFrom, vectorTo):
         return np.arctan2(np.cross(vectorTo, vectorFrom), np.dot(vectorFrom, vectorTo))
