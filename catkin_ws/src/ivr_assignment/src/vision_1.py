@@ -8,35 +8,84 @@ import rospy
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64
+from std_msgs.msg import Float64MultiArray
 
 
 class vision_1:
     def __init__(self):
         rospy.init_node("vision_1", anonymous=True)
-
         # initialize the bridge between openCV and ROS
         self.bridge = CvBridge()
+        self.initialiseSubscribers()
+        self.initialisePublishers()
+        self.initaliseMessageObjects()
+        self.initialiseBlobCentres()
+
+    def initialiseSubscribers(self):
         self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw", Image, self.callback1)
         self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw", Image, self.callback2)
+
+    def initialisePublishers(self):
         self.joint2Pub = rospy.Publisher("joint_angle_2", Float64, queue_size=10)
         self.joint3Pub = rospy.Publisher("joint_angle_3", Float64, queue_size=10)
         self.joint4Pub = rospy.Publisher("joint_angle_4", Float64, queue_size=10)
-        self.joint2 = Float64()
-        self.joint3 = Float64()
-        self.joint4 = Float64()
+
+        self.redCenterPub = rospy.Publisher("red_center", Float64MultiArray, queue_size=10)
+        self.greenCenterPub = rospy.Publisher("green_center", Float64MultiArray, queue_size=10)
+        self.blueCenterPub = rospy.Publisher("blue_center", Float64MultiArray, queue_size=10)
+        self.yellowCenterPub = rospy.Publisher("yellow_center", Float64MultiArray, queue_size=10)
+
+        self.vectorYBPub = rospy.Publisher("vector_yb", Float64MultiArray, queue_size=10)
+        self.vectorYBtoBRPub = rospy.Publisher("vector_yb_br", Float64MultiArray, queue_size=10)
+
+    # required so very first callback doesn't fail
+    def initialiseBlobCentres(self):
         self.greenC1 = np.array([])
         self.redC1 = np.array([])
         self.blueC1 = np.array([])
         self.yellowC1 = np.array([])
 
-        # TODO: Add publishers for each of the components of vectorYB and each of the components of the final centers
-        self.blue = Float64()
-        self.vectorYBPub = rospy.Publisher("vectorybpub", Float64, queue_size=10)
-        self.finalRedCenterPub = rospy.Publisher("finalredcenterpub", Float64, queue_size=10)
-        self.finalGreenCenterPub = rospy.Publisher("finalgreencenterpub", Float64, queue_size=10)
-        self.finalBlueCenterPub = rospy.Publisher("finalbluecenterpub", Float64, queue_size=10)
-        self.finalYellowCenterPub = rospy.Publisher("finalyellowcenterpub", Float64, queue_size=10)
+    def initaliseMessageObjects(self):
+        self.joint2 = Float64()
+        self.joint3 = Float64()
+        self.joint4 = Float64()
 
+        self.redMsg = Float64MultiArray()
+        self.greenMsg = Float64MultiArray()
+        self.blueMsg = Float64MultiArray()
+        self.yellowMsg = Float64MultiArray()
+
+        self.vectorYBMsg = Float64MultiArray()
+        self.vectorYBtoBRMSg = Float64MultiArray()
+
+    def publishangles(self):
+        # Publish the results
+        try:
+            self.joint2Pub.publish(self.joint2)
+            self.joint3Pub.publish(self.joint3)
+            self.joint4Pub.publish(self.joint4)
+        except CvBridgeError as e:
+            print(e)
+
+    def publishCentresAndVectors(self):
+        self.redMsg.data = (self.finalRedCenter/500.0).tolist()
+        self.blueMsg.data = (self.finalBlueCenter/500.0).tolist()
+        self.yellowMsg.data = (self.finalYellowCenter/500.0).tolist()
+        self.greenMsg.data = (self.originPoint/500.0).tolist()
+
+        self.vectorYBMsg.data = (self.vectorYB/500.0).tolist()
+        self.vectorYBtoBRMSg.data = ((self.vectorYB - self.vectorBR)/500.0).tolist()
+
+        try:
+            self.redCenterPub.publish(self.redMsg)
+            self.blueCenterPub.publish(self.blueMsg)
+            self.yellowCenterPub.publish(self.yellowMsg)
+            self.greenCenterPub.publish(self.greenMsg)
+
+            self.vectorYBPub.publish(self.vectorYBMsg)
+            self.vectorYBtoBRPub.publish(self.vectorYBtoBRMSg)
+        except CvBridgeError as e:
+            print(e)
 
     def getCentre(self, mask):
         control = sum(sum(mask))
@@ -77,21 +126,7 @@ class vision_1:
         self.combinecenters()
         self.determinejointangles()
         self.publishangles()
-        self.vectorYBPub.publish(self.vectorYB)
-        self.finalRedCenterPub.publish(self.finalRedCenter)
-        # self.finalGreenCenterPub.publish(self.originPoint)
-        self.blue.data = self.finalBlueCenter[1]/500.0
-        self.finalBlueCenterPub.publish(self.blue)
-        self.finalYellowCenterPub.publish(self.finalYellowCenter)
-
-    def publishangles(self):
-        # Publish the results
-        try:
-            self.joint2Pub.publish(self.joint2)
-            self.joint3Pub.publish(self.joint3)
-            self.joint4Pub.publish(self.joint4)
-        except CvBridgeError as e:
-            print(e)
+        self.publishCentresAndVectors()
 
     def determinejointangles(self):
         self.vectorYB = self.finalBlueCenter - self.finalYellowCenter
