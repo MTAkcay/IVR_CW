@@ -8,6 +8,7 @@ import rospy
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64
+from std_msgs.msg import Float64MultiArray
 
 
 class vision_2:
@@ -16,22 +17,77 @@ class vision_2:
 
         # initialize the bridge between openCV and ROS
         self.bridge = CvBridge()
+        self.initialiseSubscribers()
+        self.initialisePublishers()
+        self.initaliseMessageObjects()
+        self.initialiseBlobCentres()
+
+
+    def initialiseSubscribers(self):
         self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw", Image, self.callback1)
         self.image_sub2 = rospy.Subscriber("/camera2/robot/image_raw", Image, self.callback2)
+
+    def initialisePublishers(self):
         self.joint1Pub = rospy.Publisher("joint_angle_1", Float64, queue_size=10)
         self.joint3Pub = rospy.Publisher("joint_angle_3", Float64, queue_size=10)
-        self.joint4Pub = rospy.Publisher("joint_angle_4a", Float64, queue_size=10)
-        self.joint4Pubb = rospy.Publisher("joint_angle_4b", Float64, queue_size=10)
-        self.joint4Pubc = rospy.Publisher("joint_angle_4c", Float64, queue_size=10)
-        self.joint1 = Float64()
-        self.joint3 = Float64()
-        self.joint4 = Float64()
-        self.joint4b = Float64()
-        self.joint4c = Float64()
+        self.joint4Pub = rospy.Publisher("joint_angle_4", Float64, queue_size=10)
+
+        self.redCenterPub = rospy.Publisher("red_center", Float64MultiArray, queue_size=10)
+        self.greenCenterPub = rospy.Publisher("green_center", Float64MultiArray, queue_size=10)
+        self.blueCenterPub = rospy.Publisher("blue_center", Float64MultiArray, queue_size=10)
+        self.yellowCenterPub = rospy.Publisher("yellow_center", Float64MultiArray, queue_size=10)
+
+        self.vectorYBPub = rospy.Publisher("vector_yb", Float64MultiArray, queue_size=10)
+        self.vectorYBtoBRPub = rospy.Publisher("vector_yb_br", Float64MultiArray, queue_size=10)
+
+    # required so very first callback doesn't fail
+    def initialiseBlobCentres(self):
         self.greenC1 = np.array([])
         self.redC1 = np.array([])
         self.blueC1 = np.array([])
         self.yellowC1 = np.array([])
+
+    def initaliseMessageObjects(self):
+        self.joint1 = Float64()
+        self.joint3 = Float64()
+        self.joint4 = Float64()
+
+        self.redMsg = Float64MultiArray()
+        self.greenMsg = Float64MultiArray()
+        self.blueMsg = Float64MultiArray()
+        self.yellowMsg = Float64MultiArray()
+
+        self.vectorYBMsg = Float64MultiArray()
+        self.vectorYBtoBRMSg = Float64MultiArray()
+
+    def publishangles(self):
+        # Publish the results
+        try:
+            self.joint1Pub.publish(self.joint1)
+            self.joint3Pub.publish(self.joint3)
+            self.joint4Pub.publish(self.joint4)
+        except CvBridgeError as e:
+            print(e)
+
+    def publishCentresAndVectors(self):
+        self.redMsg.data = (self.finalRedCenter/500.0).tolist()
+        self.blueMsg.data = (self.finalBlueCenter/500.0).tolist()
+        self.yellowMsg.data = (self.finalYellowCenter/500.0).tolist()
+        self.greenMsg.data = (self.originPoint/500.0).tolist()
+
+        self.vectorYBMsg.data = (self.vectorYB/500.0).tolist()
+        self.vectorYBtoBRMSg.data = ((self.vectorYB - self.vectorBR)/500.0).tolist()
+
+        try:
+            self.redCenterPub.publish(self.redMsg)
+            self.blueCenterPub.publish(self.blueMsg)
+            self.yellowCenterPub.publish(self.yellowMsg)
+            self.greenCenterPub.publish(self.greenMsg)
+
+            self.vectorYBPub.publish(self.vectorYBMsg)
+            self.vectorYBtoBRPub.publish(self.vectorYBtoBRMSg)
+        except CvBridgeError as e:
+            print(e)
 
     def getCentre(self, mask):
         control = sum(sum(mask))
@@ -73,34 +129,36 @@ class vision_2:
         self.determinejointangles()
         self.publishangles()
 
-    def publishangles(self):
-        # Publish the results
-        try:
-            self.joint1Pub.publish(self.joint1)
-            self.joint3Pub.publish(self.joint3)
-            # self.joint4Puba.publish(self.joint4a)
-            # self.joint4Pubb.publish(self.joint4b)
-            self.joint4Pub.publish(self.joint4c)
-        except CvBridgeError as e:
-            print(e)
-
     def determinejointangles(self):
         self.vectorYB = self.finalBlueCenter - self.finalYellowCenter
         self.vectorBR = self.finalRedCenter - self.finalBlueCenter
 
-        # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
-
+        vecjoint1 = np.array([-self.vectorYB[0], -self.vectorYB[1]])  # y axis also appears to be flipped from camera perspective
         vecjoint2 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
-        vecjoint3 = np.array([self.vectorYB[0], self.vectorYB[2]])
         vecjoint4 = np.array([-self.vectorBR[1], self.vectorBR[2]])
-        zUnitVector = np.array([0, -1])  # z axis is flipped
+        vecjoint3 = np.array([self.pythagoras(self.vectorYB[0], self.vectorYB[1]), self.vectorBR[2]])
+        yUnitVector = np.array([0, -1])  # z axis is flipped
 
-        self.joint1.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
-        self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
-        self.joint4.data = self.angleBetweenVectors(vecjoint2, vecjoint4)
+        self.joint1.data = self.angleBetweenVectors(yUnitVector, vecjoint1)
+        self.joint3.data = self.angleBetweenVectors2(yUnitVector, vecjoint3)
+        self.joint4.data = self.angleBetweenVectors2(self.vectorYB, self.vectorBR)
+
+        self.joint1.data = self.angleBound(self.joint1.data, np.pi)
+        self.joint3.data = self.angleBound(self.joint3.data, np.pi / 2.0)
+        self.joint4.data = self.angleBound(self.joint4.data, np.pi / 2.0)
+
+    def pythagoras(self, a, b):
+        return ((a ** 2) + (b ** 2)) ** 0.5
+
+    def angleBound(self, jointAngle, limit):
+        jointAngle = max(min(jointAngle, limit), -limit)
+        return jointAngle
 
     def angleBetweenVectors(self, vectorFrom, vectorTo):
         return np.arctan2(np.cross(vectorTo, vectorFrom), np.dot(vectorFrom, vectorTo))
+
+    def angleBetweenVectors2(self, vectorFrom, vectorTo):
+        return np.arctan2(np.linalg.norm(np.cross(vectorTo, vectorFrom)), np.dot(vectorFrom, vectorTo))
 
     def combinecenters(self):
         self.originPoint = self.originhandler(self.greenC1, self.greenC2)

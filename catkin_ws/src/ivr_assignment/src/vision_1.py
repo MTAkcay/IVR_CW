@@ -134,17 +134,28 @@ class vision_1:
 
         # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
 
-        vecjoint2 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
-        vecjoint3 = np.array([self.vectorYB[0], self.vectorYB[2]])
+        vecjoint2 = np.array([-self.vectorYB[0], self.vectorYB[2]])
+        vecjoint3 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
         vecjoint4 = np.array([-self.vectorBR[1], self.vectorBR[2]])
         zUnitVector = np.array([0, -1])  # z axis is flipped
 
         self.joint2.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
         self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
-        self.joint4.data = self.angleBetweenVectors(vecjoint2, vecjoint4)
+        self.joint4.data = self.angleBetweenVectors2(self.vectorYB, self.vectorBR)
+
+        self.joint2.data = self.angleBound(self.joint2.data, np.pi / 2.0)
+        self.joint3.data = self.angleBound(self.joint3.data, np.pi / 2.0)
+        self.joint4.data = self.angleBound(self.joint4.data, np.pi / 2.0)
+
+    def angleBound(self, jointAngle, limit):
+        jointAngle = max(min(jointAngle, limit), -limit)
+        return jointAngle
 
     def angleBetweenVectors(self, vectorFrom, vectorTo):
         return np.arctan2(np.cross(vectorTo, vectorFrom), np.dot(vectorFrom, vectorTo))
+
+    def angleBetweenVectors2(self, vectorFrom, vectorTo):
+        return np.arctan2(-np.linalg.norm(np.cross(vectorTo, vectorFrom)), np.dot(vectorFrom, vectorTo))
 
     def combinecenters(self):
         self.originPoint = self.originhandler(self.greenC1, self.greenC2)
