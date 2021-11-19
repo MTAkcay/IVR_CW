@@ -105,7 +105,7 @@ class vision_1:
                                        param1=40, param2=i, minRadius=0, maxRadius=20)
             if (circles is not None):
                 circles = np.uint16(np.around(circles))
-                return np.array([circles[0][0][0], circles[0][0][1]])
+                return np.array([circles[0][0][0], -circles[0][0][1]])
             return np.array([])
             
     def findAllPoints(self, img):
@@ -145,11 +145,10 @@ class vision_1:
         self.vectorBR = self.finalRedCenter - self.finalBlueCenter
 
         # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
-
         vecjoint2 = np.array([-self.vectorYB[0], self.vectorYB[2]])
         vecjoint3 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
         vecjoint4 = np.array([-self.vectorBR[1], self.vectorBR[2]])
-        zUnitVector = np.array([0, -1])  # z axis is flipped
+        zUnitVector = np.array([0, 1])  # z axis is flipped
 
         self.joint2.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
         self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
