@@ -87,25 +87,37 @@ class vision_1:
         except CvBridgeError as e:
             print(e)
 
-    def getCentre(self, mask):
-        control = sum(sum(mask))
-        if control < 10:
-            return np.array([])
-        M = cv2.moments(mask)
-        cX = int(M["m10"] / M["m00"])
-        cY = int(M["m01"] / M["m00"])
-        return np.array([cX, cY])
+##    def getCentre(self, mask):
+##        control = sum(sum(mask))
+##        if control < 10:
+##            return np.array([])
+##        M = cv2.moments(mask)
+##        cX = int(M["m10"] / M["m00"])
+##        cY = int(M["m01"] / M["m00"])
+##        return np.array([cX, cY])
 
+    def getCentre(self, img, mask):
+        cimg = cv2.bitwise_and(img, img, mask = mask)
+        gray = cv2.cvtColor(cimg, cv2.COLOR_BGR2GRAY)
+        #docstring of HoughCircles: HoughCircles(image, method, dp, minDist[, circles[, param1[, param2[, minRadius[, maxRadius]]]]]) -> circles
+        for i in range(10, 1, -1):
+            circles = cv2.HoughCircles(gray,cv2.HOUGH_GRADIENT,1,20,
+                                       param1=40, param2=i, minRadius=0, maxRadius=20)
+            if (circles is not None):
+                circles = np.uint16(np.around(circles))
+                return np.array([circles[0][0][0], circles[0][0][1]])
+            return np.array([])
+            
     def findAllPoints(self, img):
         redMask = cv2.inRange(img, np.array([0, 0, 20]), np.array([20, 20, 255]))
         greenMask = cv2.inRange(img, np.array([0, 20, 0]), np.array([20, 255, 20]))
         blueMask = cv2.inRange(img, np.array([10, 0, 0]), np.array([255, 20, 20]))
         yellowMask = cv2.inRange(img, np.array([0, 10, 10]), np.array([0, 255, 255]))
 
-        redCentre = self.getCentre(redMask)
-        greenCentre = self.getCentre(greenMask)
-        blueCentre = self.getCentre(blueMask)
-        yellowCentre = self.getCentre(yellowMask)
+        redCentre = self.getCentre(img, redMask)
+        greenCentre = self.getCentre(img, greenMask)
+        blueCentre = self.getCentre(img, blueMask)
+        yellowCentre = self.getCentre(img, yellowMask)
         return redCentre, greenCentre, blueCentre, yellowCentre
 
     def callback1(self, data):
@@ -164,7 +176,9 @@ class vision_1:
         self.finalYellowCenter = self.centercamfusion(self.yellowC1, self.yellowC2)
 
     def centercamfusion(self, campoint1, campoint2):
-        if campoint1.size == 0:
+        if (campoint1.size == 0) and (campoint2.size == 0):
+            return np.array([-1.0, -1.0, -1.0])
+        elif campoint1.size == 0:
             return np.array([self.originPoint[0], campoint2[0], campoint2[1]])
         elif campoint2.size == 0:
             return np.array([campoint1[0], self.originPoint[1], campoint1[1]])
@@ -173,8 +187,11 @@ class vision_1:
         else:
             return np.array([-1.0, -1.0, -1.0])
 
+
     def originhandler(self, campoint1, campoint2):
-        if campoint1.size == 0:
+        if (campoint1.size == 0) and (campoint2.size == 0):
+            return np.array([-1.0, -1.0, -1.0])
+        elif campoint1.size == 0:
             return np.array([campoint2[0], campoint2[0], campoint2[1]])
         elif campoint2.size == 0:
             return np.array([campoint1[0], campoint1[0], campoint1[1]])
