@@ -121,8 +121,22 @@ class vision_2:
         except CvBridgeError as e:
             print(e)
 
-
     def getCentre(self, img, mask):
+        centre = self.getCentre1(img, mask)
+        if centre.size == 0:
+            return self.getCentre2(mask)
+        return centre
+
+    def getCentre2(self, mask):
+        control = sum(sum(mask))
+        if control < 10:
+            return np.array([])
+        M = cv2.moments(mask)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        return np.array([cX, -cY])
+
+    def getCentre1(self, img, mask):
         cimg = cv2.bitwise_and(img, img, mask = mask)
         gray = cv2.cvtColor(cimg, cv2.COLOR_BGR2GRAY)
         #docstring of HoughCircles: HoughCircles(image, method, dp, minDist[, circles[, param1[, param2[, minRadius[, maxRadius]]]]]) -> circles

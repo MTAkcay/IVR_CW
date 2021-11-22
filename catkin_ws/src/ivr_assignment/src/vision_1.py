@@ -120,6 +120,12 @@ class vision_1:
             print(e)
 
     def getCentre(self, img, mask):
+        centre = self.getCentre1(img, mask)
+        if centre.size == 0:
+            return self.getCentre2(mask)
+        return centre
+
+    def getCentre2(self, mask):
         control = sum(sum(mask))
         if control < 10:
             return np.array([])
@@ -128,17 +134,17 @@ class vision_1:
         cY = int(M["m01"] / M["m00"])
         return np.array([cX, -cY])
 
-    # def getCentre(self, img, mask):
-    #     cimg = cv2.bitwise_and(img, img, mask = mask)
-    #     gray = cv2.cvtColor(cimg, cv2.COLOR_BGR2GRAY)
-    #     #docstring of HoughCircles: HoughCircles(image, method, dp, minDist[, circles[, param1[, param2[, minRadius[, maxRadius]]]]]) -> circles
-    #     for i in range(10, 1, -1):
-    #         circles = cv2.HoughCircles(gray,cv2.HOUGH_GRADIENT,1,20,
-    #                                    param1=40, param2=i, minRadius=0, maxRadius=20)
-    #         if (circles is not None):
-    #             circles = np.uint16(np.around(circles))
-    #             return np.array([circles[0][0][0], -circles[0][0][1]])
-    #         return np.array([])
+    def getCentre1(self, img, mask):
+        cimg = cv2.bitwise_and(img, img, mask = mask)
+        gray = cv2.cvtColor(cimg, cv2.COLOR_BGR2GRAY)
+        #docstring of HoughCircles: HoughCircles(image, method, dp, minDist[, circles[, param1[, param2[, minRadius[, maxRadius]]]]]) -> circles
+        for i in range(10, 1, -1):
+            circles = cv2.HoughCircles(gray,cv2.HOUGH_GRADIENT,1,20,
+                                       param1=40, param2=i, minRadius=0, maxRadius=20)
+            if (circles is not None):
+                circles = np.uint16(np.around(circles))
+                return np.array([circles[0][0][0], -circles[0][0][1]])
+            return np.array([])
             
     def findAllPoints(self, img):
         redMask = cv2.inRange(img, np.array([0, 0, 20]), np.array([20, 20, 255]))
@@ -184,7 +190,9 @@ class vision_1:
         zUnitVector = np.array([0, 1])  # z axis is flipped
 
         self.joint2.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
-        self.joint3.data = -(self.angleBetweenVectors(zUnitVector, vecjoint3) - 0.5*self.angleBetweenVectors(zUnitVector, vecjoint3)*np.cos(self.angleBetweenVectors(zUnitVector, vecjoint3))*abs(np.sin(self.joint2.data)))
+        joint3Ang = self.angleBetweenVectors(zUnitVector, vecjoint3)
+
+        self.joint3.data = -(joint3Ang - np.sign(joint3Ang)*0.35*abs(np.sin(self.joint2.data))) # self.angleBetweenVectors(zUnitVector, vecjoint3)*np.cos(self.angleBetweenVectors(zUnitVector, vecjoint3))
         self.joint4.data = self.angleBetweenVectors2(self.vectorYB, self.vectorBR)
 
         self.joint2.data = self.angleBound(self.joint2.data, np.pi / 2.0)
