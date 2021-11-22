@@ -35,6 +35,14 @@ class vision_1:
         self.blueCenterPub = rospy.Publisher("blue_center", Float64MultiArray, queue_size=10)
         self.yellowCenterPub = rospy.Publisher("yellow_center", Float64MultiArray, queue_size=10)
 
+        self.relativeRedPub = rospy.Publisher("relative_red", Float64MultiArray, queue_size=10)
+        self.relativeBluePub = rospy.Publisher("relative_blue", Float64MultiArray, queue_size=10)
+        self.relativeYellowPub = rospy.Publisher("relative_yellow", Float64MultiArray, queue_size=10)
+
+        self.meterRedPub = rospy.Publisher("meter_red", Float64MultiArray, queue_size=10)
+        self.meterBluePub = rospy.Publisher("meter_blue", Float64MultiArray, queue_size=10)
+        self.meterYellowPub = rospy.Publisher("meter_yellow", Float64MultiArray, queue_size=10)
+
         self.vectorYBPub = rospy.Publisher("vector_yb", Float64MultiArray, queue_size=10)
         self.vectorYBtoBRPub = rospy.Publisher("vector_yb_br", Float64MultiArray, queue_size=10)
 
@@ -55,6 +63,14 @@ class vision_1:
         self.blueMsg = Float64MultiArray()
         self.yellowMsg = Float64MultiArray()
 
+        self.relativeRedMSg = Float64MultiArray()
+        self.relativeBlueMSg = Float64MultiArray()
+        self.relativeYellowMSg = Float64MultiArray()
+
+        self.meterRedMsg = Float64MultiArray()
+        self.meterBlueMsg = Float64MultiArray()
+        self.meterYellowMsg = Float64MultiArray()
+
         self.vectorYBMsg = Float64MultiArray()
         self.vectorYBtoBRMSg = Float64MultiArray()
 
@@ -73,6 +89,14 @@ class vision_1:
         self.yellowMsg.data = (self.finalYellowCenter/500.0).tolist()
         self.greenMsg.data = (self.originPoint/500.0).tolist()
 
+        self.relativeRedMSg.data = (self.finalRedCenter - self.originPoint).tolist()
+        self.relativeBlueMSg.data = (self.finalBlueCenter - self.originPoint).tolist()
+        self.relativeYellowMSg.data = (self.finalYellowCenter - self.originPoint).tolist()
+
+        self.meterRedMsg.data = ((self.finalRedCenter - self.originPoint) * self.pixelsToMetersRatio).tolist()
+        self.meterBlueMsg.data = ((self.finalBlueCenter - self.originPoint) * self.pixelsToMetersRatio).tolist()
+        self.meterYellowMsg.data = ((self.finalYellowCenter - self.originPoint) * self.pixelsToMetersRatio).tolist()
+
         self.vectorYBMsg.data = (self.vectorYB/500.0).tolist()
         self.vectorYBtoBRMSg.data = ((self.vectorYB - self.vectorBR)/500.0).tolist()
 
@@ -82,31 +106,39 @@ class vision_1:
             self.yellowCenterPub.publish(self.yellowMsg)
             self.greenCenterPub.publish(self.greenMsg)
 
+            self.relativeRedPub.publish(self.relativeRedMSg)
+            self.relativeBluePub.publish(self.relativeBlueMSg)
+            self.relativeYellowPub.publish(self.relativeYellowMSg)
+
+            self.meterRedPub.publish(self.meterRedMsg)
+            self.meterBluePub.publish(self.meterBlueMsg)
+            self.meterYellowPub.publish(self.meterYellowMsg)
+
             self.vectorYBPub.publish(self.vectorYBMsg)
             self.vectorYBtoBRPub.publish(self.vectorYBtoBRMSg)
         except CvBridgeError as e:
             print(e)
 
-##    def getCentre(self, mask):
-##        control = sum(sum(mask))
-##        if control < 10:
-##            return np.array([])
-##        M = cv2.moments(mask)
-##        cX = int(M["m10"] / M["m00"])
-##        cY = int(M["m01"] / M["m00"])
-##        return np.array([cX, cY])
-
     def getCentre(self, img, mask):
-        cimg = cv2.bitwise_and(img, img, mask = mask)
-        gray = cv2.cvtColor(cimg, cv2.COLOR_BGR2GRAY)
-        #docstring of HoughCircles: HoughCircles(image, method, dp, minDist[, circles[, param1[, param2[, minRadius[, maxRadius]]]]]) -> circles
-        for i in range(10, 1, -1):
-            circles = cv2.HoughCircles(gray,cv2.HOUGH_GRADIENT,1,20,
-                                       param1=40, param2=i, minRadius=0, maxRadius=20)
-            if (circles is not None):
-                circles = np.uint16(np.around(circles))
-                return np.array([circles[0][0][0], -circles[0][0][1]])
+        control = sum(sum(mask))
+        if control < 10:
             return np.array([])
+        M = cv2.moments(mask)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        return np.array([cX, -cY])
+
+    # def getCentre(self, img, mask):
+    #     cimg = cv2.bitwise_and(img, img, mask = mask)
+    #     gray = cv2.cvtColor(cimg, cv2.COLOR_BGR2GRAY)
+    #     #docstring of HoughCircles: HoughCircles(image, method, dp, minDist[, circles[, param1[, param2[, minRadius[, maxRadius]]]]]) -> circles
+    #     for i in range(10, 1, -1):
+    #         circles = cv2.HoughCircles(gray,cv2.HOUGH_GRADIENT,1,20,
+    #                                    param1=40, param2=i, minRadius=0, maxRadius=20)
+    #         if (circles is not None):
+    #             circles = np.uint16(np.around(circles))
+    #             return np.array([circles[0][0][0], -circles[0][0][1]])
+    #         return np.array([])
             
     def findAllPoints(self, img):
         redMask = cv2.inRange(img, np.array([0, 0, 20]), np.array([20, 20, 255]))
@@ -136,6 +168,7 @@ class vision_1:
             print(e)
         self.redC2, self.greenC2, self.blueC2, self.yellowC2 = self.findAllPoints(self.cv_image2)
         self.combinecenters()
+        self.setPixelsToMetersRatio()
         self.determinejointangles()
         self.publishangles()
         self.publishCentresAndVectors()
@@ -145,13 +178,13 @@ class vision_1:
         self.vectorBR = self.finalRedCenter - self.finalBlueCenter
 
         # when rotating about x axis, the x-coordinate doesn't change - the focus should be on y
-        vecjoint2 = np.array([-self.vectorYB[0], self.vectorYB[2]])
-        vecjoint3 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
-        vecjoint4 = np.array([-self.vectorBR[1], self.vectorBR[2]])
+        vecjoint2 = np.array([self.vectorYB[0], self.vectorYB[2]])
+        vecjoint3 = np.array([self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
+        vecjoint4 = np.array([self.vectorBR[1], self.vectorBR[2]])
         zUnitVector = np.array([0, 1])  # z axis is flipped
 
         self.joint2.data = self.angleBetweenVectors(zUnitVector, vecjoint2)
-        self.joint3.data = self.angleBetweenVectors(zUnitVector, vecjoint3)
+        self.joint3.data = -(self.angleBetweenVectors(zUnitVector, vecjoint3) - 0.5*self.angleBetweenVectors(zUnitVector, vecjoint3)*np.cos(self.angleBetweenVectors(zUnitVector, vecjoint3))*abs(np.sin(self.joint2.data)))
         self.joint4.data = self.angleBetweenVectors2(self.vectorYB, self.vectorBR)
 
         self.joint2.data = self.angleBound(self.joint2.data, np.pi / 2.0)
@@ -176,28 +209,37 @@ class vision_1:
 
     def centercamfusion(self, campoint1, campoint2):
         if (campoint1.size == 0) and (campoint2.size == 0):
+            print("Defaulting")
             return np.array([-1.0, -1.0, -1.0])
         elif campoint1.size == 0:
-            return np.array([self.originPoint[0], campoint2[0], campoint2[1]])
+            print("Limited Campoint 1 visibility")
+            return np.array([campoint2[0], self.originPoint[1], campoint2[1]])
         elif campoint2.size == 0:
-            return np.array([campoint1[0], self.originPoint[1], campoint1[1]])
+            print("Limited Campoint 2 visibility")
+            return np.array([self.originPoint[1], campoint1[0], campoint1[1]])
         elif (campoint1.size == 2) and (campoint2.size == 2):
-            return np.array([campoint1[0], campoint2[0], (campoint2[1] + campoint1[1]) / 2])
+            return np.array([campoint2[0], campoint1[0], (campoint2[1] + campoint1[1]) / 2])
         else:
             return np.array([-1.0, -1.0, -1.0])
 
 
     def originhandler(self, campoint1, campoint2):
         if (campoint1.size == 0) and (campoint2.size == 0):
+            print("Defaulting")
             return np.array([-1.0, -1.0, -1.0])
         elif campoint1.size == 0:
+            print("Limited Campoint 1 visibility")
             return np.array([campoint2[0], campoint2[0], campoint2[1]])
         elif campoint2.size == 0:
+            print("Limited Campoint 2 visibility")
             return np.array([campoint1[0], campoint1[0], campoint1[1]])
         elif (campoint1.size == 2) and (campoint2.size == 2):
-            return np.array([campoint1[0], campoint2[0], (campoint2[1] + campoint1[1]) / 2])
+            return np.array([campoint2[0], campoint1[0], (campoint2[1] + campoint1[1]) / 2])
         else:
             return np.array([-1.0, -1.0, -1.0])
+
+    def setPixelsToMetersRatio(self):
+        self.pixelsToMetersRatio = 4.0 / np.linalg.norm(self.finalYellowCenter - self.originPoint)
 
 
 # call the class

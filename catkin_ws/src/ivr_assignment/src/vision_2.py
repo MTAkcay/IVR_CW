@@ -37,6 +37,14 @@ class vision_2:
         self.blueCenterPub = rospy.Publisher("blue_center", Float64MultiArray, queue_size=10)
         self.yellowCenterPub = rospy.Publisher("yellow_center", Float64MultiArray, queue_size=10)
 
+        self.relativeRedPub = rospy.Publisher("relative_red", Float64MultiArray, queue_size=10)
+        self.relativeBluePub = rospy.Publisher("relative_blue", Float64MultiArray, queue_size=10)
+        self.relativeYellowPub = rospy.Publisher("relative_yellow", Float64MultiArray, queue_size=10)
+
+        self.meterRedPub = rospy.Publisher("meter_red", Float64MultiArray, queue_size=10)
+        self.meterBluePub = rospy.Publisher("meter_blue", Float64MultiArray, queue_size=10)
+        self.meterYellowPub = rospy.Publisher("meter_yellow", Float64MultiArray, queue_size=10)
+
         self.vectorYBPub = rospy.Publisher("vector_yb", Float64MultiArray, queue_size=10)
         self.vectorYBtoBRPub = rospy.Publisher("vector_yb_br", Float64MultiArray, queue_size=10)
 
@@ -57,6 +65,14 @@ class vision_2:
         self.blueMsg = Float64MultiArray()
         self.yellowMsg = Float64MultiArray()
 
+        self.relativeRedMSg = Float64MultiArray()
+        self.relativeBlueMSg = Float64MultiArray()
+        self.relativeYellowMSg = Float64MultiArray()
+
+        self.meterRedMsg = Float64MultiArray()
+        self.meterBlueMsg = Float64MultiArray()
+        self.meterYellowMsg = Float64MultiArray()
+
         self.vectorYBMsg = Float64MultiArray()
         self.vectorYBtoBRMSg = Float64MultiArray()
 
@@ -75,6 +91,14 @@ class vision_2:
         self.yellowMsg.data = (self.finalYellowCenter/500.0).tolist()
         self.greenMsg.data = (self.originPoint/500.0).tolist()
 
+        self.relativeRedMSg.data = (self.finalRedCenter - self.originPoint).tolist()
+        self.relativeBlueMSg.data = (self.finalBlueCenter - self.originPoint).tolist()
+        self.relativeYellowMSg.data = (self.finalYellowCenter - self.originPoint).tolist()
+
+        self.meterRedMsg.data = ((self.finalRedCenter - self.originPoint) * self.pixelsToMetersRatio).tolist()
+        self.meterBlueMsg.data = ((self.finalBlueCenter - self.originPoint) * self.pixelsToMetersRatio).tolist()
+        self.meterYellowMsg.data = ((self.finalYellowCenter - self.originPoint) * self.pixelsToMetersRatio).tolist()
+
         self.vectorYBMsg.data = (self.vectorYB/500.0).tolist()
         self.vectorYBtoBRMSg.data = ((self.vectorYB - self.vectorBR)/500.0).tolist()
 
@@ -83,6 +107,14 @@ class vision_2:
             self.blueCenterPub.publish(self.blueMsg)
             self.yellowCenterPub.publish(self.yellowMsg)
             self.greenCenterPub.publish(self.greenMsg)
+
+            self.relativeRedPub.publish(self.relativeRedMSg)
+            self.relativeBluePub.publish(self.relativeBlueMSg)
+            self.relativeYellowPub.publish(self.relativeYellowMSg)
+
+            self.meterRedPub.publish(self.meterRedMsg)
+            self.meterBluePub.publish(self.meterBlueMsg)
+            self.meterYellowPub.publish(self.meterYellowMsg)
 
             self.vectorYBPub.publish(self.vectorYBMsg)
             self.vectorYBtoBRPub.publish(self.vectorYBtoBRMSg)
@@ -130,8 +162,10 @@ class vision_2:
             print(e)
         self.redC2, self.greenC2, self.blueC2, self.yellowC2 = self.findAllPoints(self.cv_image2)
         self.combinecenters()
+        self.setPixelsToMetersRatio()
         self.determinejointangles()
         self.publishangles()
+        self.publishCentresAndVectors()
 
     def determinejointangles(self):
         self.vectorYB = self.finalBlueCenter - self.finalYellowCenter
@@ -194,6 +228,9 @@ class vision_2:
             return np.array([campoint1[0], campoint2[0], (campoint2[1] + campoint1[1]) / 2])
         else:
             return np.array([-1.0, -1.0, -1.0])
+
+    def setPixelsToMetersRatio(self):
+        self.pixelsToMetersRatio = 4.0 / np.linalg.norm(self.finalYellowCenter - self.originPoint)
 
 
 # call the class
