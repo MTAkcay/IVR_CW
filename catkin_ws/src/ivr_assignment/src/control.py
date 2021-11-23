@@ -15,6 +15,19 @@ from cv_bridge import CvBridge, CvBridgeError
 class control:
     def __init__(self):
         rospy.init_node("control", anonymous=True)
+        self.prevTime = rospy.get_time()
+
+        self.joints = [0.0, 0.0, 0.0]
+        self.redCenter = [0.0, 0.0, 0.0]
+        self.redCenter = [0.0, 0.0, 0.0]
+        self.target = [0.0, 0.0, 0.0]
+
+        self.fk_predicted_pos = Float64MultiArray()
+        self.joint1 = Float64()
+        self.joint3 = Float64()
+        self.joint4 = Float64()
+        self.effectorError = Float64MultiArray()
+
         self.joint1Sub = rospy.Subscriber("joint_angle_1", Float64, self.callback0)
         self.joint3Sub = rospy.Subscriber("joint_angle_3", Float64, self.callback1)
         self.joint4Sub = rospy.Subscriber("joint_angle_4", Float64, self.callback2)
@@ -26,38 +39,28 @@ class control:
         self.joint4Pub = rospy.Publisher("/robot/joint4_position_controller/command", Float64, queue_size=10)
         self.effectorErrorPub = rospy.Publisher("effector_error", Float64MultiArray, queue_size=10)
 
-        self.fk_predicted_pos = Float64MultiArray()
-        self.joint1 = Float64()
-        self.joint3 = Float64()
-        self.joint4 = Float64()
-        self.effectorError = Float64MultiArray()
 
-        self.joints = [0.0, 0.0, 0.0]
-        self.redCenter = [0.0, 0.0, 0.0]
-        self.redCenter = [0.0, 0.0, 0.0]
-        self.prev_Time = 0
-        self.target = [0.0, 0.0, 0.0]
 
     def callback0(self, data):
-        self.joints[0] = data
+        self.joints[0] = data.data
         self.publish_kinematic_endpoint()
 
     def callback1(self, data):
         # Receive the image
-        self.joints[1] = data
+        self.joints[1] = data.data
 
     def callback2(self, data):
         # Receive the image
-        self.joints[2] = data
+        self.joints[2] = data.data
 
     def callback3(self, data):
         # Receive the image
-        self.target = data
+        self.target = data.data
         self.control_open()
 
     def callback4(self, data):
         # Receive the image
-        self.redCenter = data
+        self.redCenter = data.data
 
     def forward_kinematics(self, q1, q2, q3):
         return [7.8 * np.cos(q1) + 2.8 * (np.cos(q1) * np.cos(q3) - np.sin(q1) * np.sin(q2) * np.sin(q3)),
@@ -85,8 +88,8 @@ class control:
 
     def control_open(self):
         currTime = rospy.get_time()
-        dt = currTime - self.prev_Time
-        self.prev_Time = currTime
+        dt = currTime - self.prevTime
+        self.prevTime = currTime
         q = self.joints
         J_inv = np.linalg.pinv(self.calculate_jacobian(q[0], q[1], q[2]))
         posDesired = np.array(self.target)

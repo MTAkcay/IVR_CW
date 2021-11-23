@@ -21,7 +21,7 @@ class vision_2:
         self.initialisePublishers()
         self.initaliseMessageObjects()
         self.initialiseBlobCentres()
-
+        self.initialiseJointLookback()
 
     def initialiseSubscribers(self):
         self.image_sub1 = rospy.Subscriber("/camera1/robot/image_raw", Image, self.callback1)
@@ -75,6 +75,13 @@ class vision_2:
 
         self.vectorYBMsg = Float64MultiArray()
         self.vectorYBtoBRMSg = Float64MultiArray()
+
+    def initialiseJointLookback(self):
+        self.iterationNumber = 0
+
+        self.lastJoint1 = 0.0
+        self.lastJoint3 = 0.0
+        self.lastJoint4 = 0.0
 
     def publishangles(self):
         # Publish the results
@@ -178,6 +185,7 @@ class vision_2:
         self.combinecenters()
         self.setPixelsToMetersRatio()
         self.determinejointangles()
+        self.updateLastJoint()
         self.publishangles()
         self.publishCentresAndVectors()
 
@@ -185,29 +193,47 @@ class vision_2:
         self.vectorYB = self.finalBlueCenter - self.finalYellowCenter
         self.vectorBR = self.finalRedCenter - self.finalBlueCenter
 
-        vecjoint1 = np.array([-self.vectorYB[0], -self.vectorYB[1]])  # y axis also appears to be flipped from camera perspective
+        vecjoint1 = np.array([self.vectorYB[0], self.vectorYB[1]])  # y axis also appears to be flipped from camera perspective
         vecjoint2 = np.array([-self.vectorYB[1], self.vectorYB[2]])  # y axis also appears to be flipped from camera perspective
         vecjoint4 = np.array([-self.vectorBR[1], self.vectorBR[2]])
-        vecjoint3 = np.array([self.pythagoras(self.vectorYB[0], self.vectorYB[1]), self.vectorBR[2]])
+        vecjoint3 = np.array([np.linalg.norm(self.vectorYB[:2]), self.vectorYB[2]])
         yUnitVector = np.array([0, -1])  # z axis is flipped
+        zUnitVector = np.array([0, 1])  # z axis is flipped
 
         self.joint1.data = self.angleBetweenVectors(yUnitVector, vecjoint1)
-        self.joint3.data = self.angleBetweenVectors2(yUnitVector, vecjoint3)
-        self.joint4.data = self.angleBetweenVectors2(self.vectorYB, self.vectorBR)
 
-        self.joint1.data = self.angleBound(self.joint1.data, np.pi)
-        self.joint3.data = self.angleBound(self.joint3.data, np.pi / 2.0)
-        self.joint4.data = self.angleBound(self.joint4.data, np.pi / 2.0)
+        isSwitched = self.detectSwitch()
+        self.joint3.data = self.angleBetweenVectors2(zUnitVector, vecjoint3) * isSwitched
+        # print("Joint3:", self.joint3.data, vecjoint3[0], vecjoint3[1], str(self.vectorYB))
 
-    def pythagoras(self, a, b):
-        return ((a ** 2) + (b ** 2)) ** 0.5
+        # self.joint4.data = self.angleBetweenVectors2(self.vectorYB, self.vectorBR)
+        vecjoint4 = self.reverseJoint1(self.reverseJoint3(self.vectorBR))[0:3:2]
+        self.joint4.data = self.angleBetweenVectors(zUnitVector, vecjoint4)
 
-    def angleBound(self, jointAngle, limit):
+        self.joint1.data = self.angleBound(self.joint1.data, np.pi, self.lastJoint1)
+        self.joint3.data = self.angleBound(self.joint3.data, np.pi / 2.0, self.lastJoint3)
+        self.joint4.data = self.angleBound(self.joint4.data, np.pi / 2.0, self.lastJoint4)
+
+    def detectSwitch(self):
+        if (abs(self.joint1.data - self.lastJoint1) > 1.6) and (self.iterationNumber > 30):
+            print("Switching")
+            self.joint1.data = -(np.pi - self.joint1.data) % 360
+            return -1
+        return 1
+
+    def angleBound(self, jointAngle, limit, lastAngle):
         jointAngle = max(min(jointAngle, limit), -limit)
+        if (abs(jointAngle - lastAngle) > 0.2) and (abs(jointAngle - lastAngle) <= 1.05) and (self.iterationNumber > 30):
+            print("Limiting Angle Move")
+            jointAngle += np.sign(jointAngle - lastAngle) * 0.05
+        if (abs(jointAngle - lastAngle) > 1.05) and (self.iterationNumber > 10):
+            print(jointAngle, lastAngle, self.iterationNumber)
+            jointAngle = lastAngle
         return jointAngle
 
     def angleBetweenVectors(self, vectorFrom, vectorTo):
-        return np.arctan2(np.cross(vectorTo, vectorFrom), np.dot(vectorFrom, vectorTo))
+        sign = np.sign(vectorTo[0])
+        return np.arctan2(np.linalg.norm(np.cross(vectorTo, vectorFrom)), np.dot(vectorFrom, vectorTo)) * sign
 
     def angleBetweenVectors2(self, vectorFrom, vectorTo):
         return np.arctan2(np.linalg.norm(np.cross(vectorTo, vectorFrom)), np.dot(vectorFrom, vectorTo))
@@ -220,32 +246,57 @@ class vision_2:
 
     def centercamfusion(self, campoint1, campoint2):
         if (campoint1.size == 0) and (campoint2.size == 0):
+            print("Defaulting")
             return np.array([-1.0, -1.0, -1.0])
         elif campoint1.size == 0:
-            return np.array([self.originPoint[0], campoint2[0], campoint2[1]])
+            print("Limited Campoint 1 visibility")
+            return np.array([campoint2[0], self.originPoint[1], campoint2[1]])
         elif campoint2.size == 0:
-            return np.array([campoint1[0], self.originPoint[1], campoint1[1]])
+            print("Limited Campoint 2 visibility")
+            return np.array([self.originPoint[1], campoint1[0], campoint1[1]])
         elif (campoint1.size == 2) and (campoint2.size == 2):
-            return np.array([campoint1[0], campoint2[0], (campoint2[1] + campoint1[1]) / 2])
+            return np.array([campoint2[0], campoint1[0], (campoint2[1] + campoint1[1]) / 2])
         else:
             return np.array([-1.0, -1.0, -1.0])
 
 
     def originhandler(self, campoint1, campoint2):
         if (campoint1.size == 0) and (campoint2.size == 0):
+            print("Defaulting")
             return np.array([-1.0, -1.0, -1.0])
         elif campoint1.size == 0:
+            print("Limited Campoint 1 visibility")
             return np.array([campoint2[0], campoint2[0], campoint2[1]])
         elif campoint2.size == 0:
+            print("Limited Campoint 2 visibility")
             return np.array([campoint1[0], campoint1[0], campoint1[1]])
         elif (campoint1.size == 2) and (campoint2.size == 2):
-            return np.array([campoint1[0], campoint2[0], (campoint2[1] + campoint1[1]) / 2])
+            return np.array([campoint2[0], campoint1[0], (campoint2[1] + campoint1[1]) / 2])
         else:
             return np.array([-1.0, -1.0, -1.0])
 
     def setPixelsToMetersRatio(self):
         self.pixelsToMetersRatio = 4.0 / np.linalg.norm(self.finalYellowCenter - self.originPoint)
 
+    def updateLastJoint(self):
+        self.iterationNumber += 1
+        self.lastJoint1 = self.joint1.data
+        self.lastJoint3 = self.joint3.data
+        self.lastJoint4 = self.joint4.data
+
+    def reverseJoint1(self, vectorBR):
+        th = -self.joint1.data
+        reverseMatrix = np.array([[np.cos(th), -np.sin(th), 0],
+                                  [np.sin(th), np.cos(th), 0],
+                                  [0, 0, 1]])
+        return reverseMatrix.dot(vectorBR.T)
+
+    def reverseJoint3(self, vectorBR):
+        th = -self.joint3.data
+        reverseMatrix = np.array([[1, 0, 0],
+                                  [0, np.cos(th), -np.sin(th)],
+                                  [0, np.sin(th), np.cos(th)]])
+        return reverseMatrix.dot(vectorBR.T)
 
 # call the class
 def main(args):
