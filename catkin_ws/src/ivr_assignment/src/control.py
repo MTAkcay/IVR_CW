@@ -10,6 +10,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float64
 from std_msgs.msg import Float64MultiArray
 from cv_bridge import CvBridge, CvBridgeError
+import time
 
 
 class control:
@@ -17,9 +18,10 @@ class control:
         rospy.init_node("control", anonymous=True)
         self.prevTime = rospy.get_time()
 
+        # self.joints = [0.0, 0.0]
         self.joints = [0.0, 0.0, 0.0]
         self.redCenter = [0.0, 0.0, 0.0]
-        self.redCenter = [0.0, 0.0, 0.0]
+        # self.blueCenter = [0.0, 0.0, 0.0]
         self.target = [0.0, 0.0, 0.0]
 
         self.fk_predicted_pos = Float64MultiArray()
@@ -28,22 +30,24 @@ class control:
         self.joint4 = Float64()
         self.effectorError = Float64MultiArray()
 
-        self.joint1Sub = rospy.Subscriber("joint_angle_1", Float64, self.callback0)
-        self.joint3Sub = rospy.Subscriber("joint_angle_3", Float64, self.callback1)
-        self.joint4Sub = rospy.Subscriber("joint_angle_4", Float64, self.callback2)
-        self.targetSub = rospy.Subscriber("/target_control/target_pos", Float64MultiArray, self.callback3)
-        self.meterRedSub = rospy.Subscriber("meter_red", Float64MultiArray, self.callback4)
         self.fkPub = rospy.Publisher("fk_endpoint", Float64MultiArray, queue_size=10)
         self.joint1Pub = rospy.Publisher("/robot/joint1_position_controller/command", Float64, queue_size=10)
         self.joint3Pub = rospy.Publisher("/robot/joint3_position_controller/command", Float64, queue_size=10)
         self.joint4Pub = rospy.Publisher("/robot/joint4_position_controller/command", Float64, queue_size=10)
         self.effectorErrorPub = rospy.Publisher("effector_error", Float64MultiArray, queue_size=10)
 
+        self.joint1Sub = rospy.Subscriber("joint_angle_1", Float64, self.callback0)
+        self.joint3Sub = rospy.Subscriber("joint_angle_3", Float64, self.callback1)
+        self.joint4Sub = rospy.Subscriber("joint_angle_4", Float64, self.callback2)
+        self.meterRedSub = rospy.Subscriber("meter_red", Float64MultiArray, self.callback4)
+        # self.meterBlueSub = rospy.Subscriber("meter_blue", Float64MultiArray, self.callback5)
+        self.targetSub = rospy.Subscriber("/target_control/target_pos", Float64MultiArray, self.callback3)
+
 
 
     def callback0(self, data):
         self.joints[0] = data.data
-        self.publish_kinematic_endpoint()
+        # self.publish_kinematic_endpoint()
 
     def callback1(self, data):
         # Receive the image
@@ -63,24 +67,42 @@ class control:
         self.redCenter = data.data
 
     def forward_kinematics(self, q1, q2, q3):
-        return [7.8 * np.cos(q1) + 2.8 * (np.cos(q1) * np.cos(q3) - np.sin(q1) * np.sin(q2) * np.sin(q3)),
-                2.8 * (np.cos(q1) * np.sin(q2) * np.sin(q3) - np.sin(q1) * np.cos(q3)) - 7.8 * np.sin(q1),
-                -2.8 * np.cos(q2) * np.sin(q3)]
+        c1 = np.cos(q1)
+        s1 = np.sin(q1)
+        c2 = np.cos(q2)
+        s2 = np.sin(q2)
+        c3 = np.cos(q3)
+        s3 = np.sin(q3)
+
+        return [3.2 * s1 * s2 + 2.8 * (c1 * s3 + s1 * s2 * c3),
+                2.8 * (s1 * s3 - c1 * s2 * c3) - 3.2 * c1 * s2,
+                2.8 * c2 * c3 + 3.2 * c2 + 4]
 
     def calculate_jacobian(self, q1, q2, q3):
-        return [[-7.8 * np.sin(q1) + 2.8 * (-np.sin(q1) * np.cos(q3) - np.cos(q1) * np.sin(q2) * np.sin(q3)),
-                2.8 * -np.sin(q1) * np.cos(q2) * np.sin(q3),
-                2.8 * (-np.cos(q1) * np.sin(q3) - np.sin(q1) * np.sin(q2) * np.cos(q3))],
-                [2.8 * (-np.sin(q1) * np.sin(q2) * np.sin(q3) - np.cos(q1) * np.cos(q3)) - 7.8 * np.cos(q1),
-                 2.8 * np.cos(q1) * np.cos(q2) * np.sin(q3),
-                 2.8 * (np.cos(q1) * np.sin(q2) * np.cos(q3) + np.sin(q1) * np.sin(q3))],
-                [0,
-                 2.8 * np.sin(q2) * np.sin(q3),
-                 -2.8 * np.cos(q2) * np.cos(q3)]]
+        c1 = np.cos(q1)
+        s1 = np.sin(q1)
+        c2 = np.cos(q2)
+        s2 = np.sin(q2)
+        c3 = np.cos(q3)
+        s3 = np.sin(q3)
+
+        return np.array([[3.2*c1*s2 - 2.8*s1*s3 + 2.8*c1*s2*c3,
+                          3.2*s1*c2 + 2.8*s1*c2*c3,
+                          2.8*c1*c3 - 2.8*s1*s2*s3],
+                         [2.8*c1*s3 + 2.8*s1*s2*c3 + 3.2*s1*s2,
+                          -2.8*c1*c2*c3 - 3.2*c1*c2,
+                          2.8*s1*c3 + 2.8*c1*s2*s3],
+                         [0,
+                          -2.8*s2*c3 - 3.2*s2,
+                          -2.8*c2*s3]])
 
     def publish_kinematic_endpoint(self):
         q = self.joints
         self.fk_predicted_pos.data = self.forward_kinematics(q[0], q[1], q[2])
+        # print()
+        # print("Angles Detected:", q)
+        # print("Vision End Effector Position:", self.redCenter)
+        # print("Forward Kinematics End Effector Position:", self.fk_predicted_pos.data)
         try:
             self.fkPub.publish(self.fk_predicted_pos)
         except CvBridgeError as e:
@@ -89,20 +111,41 @@ class control:
     def control_open(self):
         currTime = rospy.get_time()
         dt = currTime - self.prevTime
+        # dt = 1
         self.prevTime = currTime
         q = self.joints
+        # J_inv = np.linalg.pinv(self.calculate_jacobian(q[0], q[1], q[1]))
         J_inv = np.linalg.pinv(self.calculate_jacobian(q[0], q[1], q[2]))
         posDesired = np.array(self.target)
         posEffector = np.array(self.redCenter)
+        # posEffector = np.array(self.blueCenter)
         posDelta = posDesired - posEffector
-        jointsDelta = dt * np.dot(J_inv, posDelta.T)
+        jointsDelta = dt*np.dot(J_inv, posDelta.T)
 
-        finalAngle = np.array(self.joints) + jointsDelta
+        finalAngle = np.array(self.joints) + (jointsDelta * posDelta[:2])
         self.joint1.data = finalAngle[0]
         self.joint3.data = finalAngle[1]
         self.joint4.data = finalAngle[2]
+        # newPose = np.array(self.forward_kinematics(finalAngle[0], finalAngle[1], finalAngle[2]))
+
+
         self.effectorError.data = posDelta.tolist()
         self.publish_angles_and_error()
+
+        # print("#####################################################")
+        # print("Original Pose:", self.blueCenter)
+        # print()
+        # print("Joints Delta:", jointsDelta)
+        # print("New Joint Angles:", finalAngle)
+        # print()
+        #
+        # print("Desired Pose:", posDesired)
+        # print("New Position", newPose)
+        # print()
+        # posChange = newPose - self.blueCenter
+        # print("Change in Pose Wanted:", posDelta)
+        # print("Change in Pose", posChange)
+        # print("#####################################################")
 
     def publish_angles_and_error(self):
         # Publish the results
