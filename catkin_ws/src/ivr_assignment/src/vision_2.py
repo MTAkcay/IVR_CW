@@ -47,21 +47,8 @@ class vision_2:
         self.joint3 = Float64()
         self.joint4 = Float64()
 
-        self.redMsg = Float64MultiArray()
-        self.greenMsg = Float64MultiArray()
-        self.blueMsg = Float64MultiArray()
-        self.yellowMsg = Float64MultiArray()
-
-        self.relativeRedMSg = Float64MultiArray()
-        self.relativeBlueMSg = Float64MultiArray()
-        self.relativeYellowMSg = Float64MultiArray()
-
         self.meterRedMsg = Float64MultiArray()
         self.meterBlueMsg = Float64MultiArray()
-        self.meterYellowMsg = Float64MultiArray()
-
-        self.vectorYBMsg = Float64MultiArray()
-        self.vectorYBtoBRMSg = Float64MultiArray()
 
     def initialiseJointLookback(self):
         self.iterationNumber = 0
@@ -69,8 +56,6 @@ class vision_2:
         self.lastJoint1 = 0.0
         self.lastJoint3 = 0.0
         self.lastJoint4 = 0.0
-
-        self.isSwitched = 1
 
     def publishangles(self):
         # Publish the results

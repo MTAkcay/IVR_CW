@@ -23,6 +23,7 @@ class control:
         self.redCenter = [0.0, 0.0, 0.0]
         # self.blueCenter = [0.0, 0.0, 0.0]
         self.target = [0.0, 0.0, 0.0]
+        self.generate_seed_locations()
 
         self.fk_predicted_pos = Float64MultiArray()
         self.joint1 = Float64()
@@ -42,7 +43,6 @@ class control:
         self.meterRedSub = rospy.Subscriber("meter_red", Float64MultiArray, self.callback4)
         # self.meterBlueSub = rospy.Subscriber("meter_blue", Float64MultiArray, self.callback5)
         self.targetSub = rospy.Subscriber("/target_control/target_pos", Float64MultiArray, self.callback3)
-
 
 
     def callback0(self, data):
@@ -111,41 +111,30 @@ class control:
     def control_open(self):
         currTime = rospy.get_time()
         dt = currTime - self.prevTime
-        # dt = 1
         self.prevTime = currTime
         q = self.joints
-        # J_inv = np.linalg.pinv(self.calculate_jacobian(q[0], q[1], q[1]))
         J_inv = np.linalg.pinv(self.calculate_jacobian(q[0], q[1], q[2]))
         posDesired = np.array(self.target)
         posEffector = np.array(self.redCenter)
-        # posEffector = np.array(self.blueCenter)
         posDelta = posDesired - posEffector
         jointsDelta = dt*np.dot(J_inv, posDelta.T)
 
-        finalAngle = np.array(self.joints) + (jointsDelta * posDelta[:2])
+        finalAngle = np.array(self.joints) + jointsDelta
+
+        legal = self.isLegal(finalAngle)
+        if (not legal):
+            self.failureIndex = (self.failureIndex + 1) % len(self.seeds)
+            self.pickSeed()
+            self.publish_angles_and_error()
+            rospy.sleep(0.2)
+
+
         self.joint1.data = finalAngle[0]
         self.joint3.data = finalAngle[1]
         self.joint4.data = finalAngle[2]
-        # newPose = np.array(self.forward_kinematics(finalAngle[0], finalAngle[1], finalAngle[2]))
-
 
         self.effectorError.data = posDelta.tolist()
         self.publish_angles_and_error()
-
-        # print("#####################################################")
-        # print("Original Pose:", self.blueCenter)
-        # print()
-        # print("Joints Delta:", jointsDelta)
-        # print("New Joint Angles:", finalAngle)
-        # print()
-        #
-        # print("Desired Pose:", posDesired)
-        # print("New Position", newPose)
-        # print()
-        # posChange = newPose - self.blueCenter
-        # print("Change in Pose Wanted:", posDelta)
-        # print("Change in Pose", posChange)
-        # print("#####################################################")
 
     def publish_angles_and_error(self):
         # Publish the results
@@ -156,6 +145,29 @@ class control:
             self.effectorErrorPub.publish(self.effectorError)
         except CvBridgeError as e:
             print(e)
+
+    def generate_seed_locations(self):
+        self.failureIndex = 0
+        self.seeds = []
+        for i in np.linspace(-np.pi, np.pi, 4 ):
+            for j in np.linspace(-np.pi/2, np.pi/2, 4):
+                for k in np.linspace(-np.pi / 2, np.pi / 2, 4):
+                    self.seeds.append([i, j, k])
+
+    def isLegal(self, finalAngle):
+        if abs(finalAngle[0]) >= np.pi:
+            return False
+        if abs(finalAngle[1]) >= np.pi/2:
+            return False
+        if abs(finalAngle[2]) >= np.pi/2:
+            return False
+        return True
+
+    def pickSeed(self):
+        seed = self.seeds[self.failureIndex]
+        self.joint1.data = seed[0]
+        self.joint3.data = seed[1]
+        self.joint4.data = seed[2]
 
 
 # call the class
